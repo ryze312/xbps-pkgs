@@ -1,0 +1,23 @@
+# Template file for 'rudolfs'
+
+pkgname=rudolfs
+version=0.3.8
+revision=1
+build_style=cargo
+short_desc="High-performance, caching Git LFS server"
+maintainer="ryze312 <50497128+ryze312@users.noreply.github.com>"
+license="MIT"
+homepage="https://github.com/jasonwhite/rudolfs"
+changelog="${homepage}/blob/${version}/CHANGELOG.md"
+distfiles="${homepage}/archive/refs/tags/${version}.tar.gz"
+checksum="aa906f523b1138deef1e26fb12543a7190f263a34152ff57cb5dc690f52543dc"
+
+system_accounts=rudolfs
+rudolfs_homedir=/var/lib/rudolfs
+make_dirs="${rudolfs_homedir} 0755 rudolfs rudolfs"
+
+post_install() {
+	vdoc README.md
+	vlicense LICENSE
+	vsv rudolfs
+}
