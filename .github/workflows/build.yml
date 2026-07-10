@@ -1,0 +1,89 @@
+name: Build xbps-pkgs packages
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+
+jobs:
+  build:
+    name: Build packages
+    runs-on: ubuntu-latest
+
+    container:
+      image: ghcr.io/void-linux/void-glibc-full
+      # Fixes:
+      # Failed to unshare from the current namespace (Operation not permitted)
+      options: --privileged
+
+    strategy:
+      matrix:
+        arch: [x86, x86_64]
+
+    env:
+      VOID_ARCH: ${{ matrix.arch == 'x86' && 'i686' || matrix.arch }}
+      VOID_LIBC: glibc
+
+    steps:
+      - name: Prepare build environment
+        run: |
+          xbps-install -Sy bash sudo git
+          useradd -M -G xbuilder builder
+
+          echo "VOID_REPOSITORY=repository-${VOID_ARCH}-${VOID_LIBC}" >> $GITHUB_ENV
+
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Merge with void-packages
+        run: |
+          git clone --depth=1 https://github.com/void-linux/void-packages.git /merged
+
+          cp -r srcpkgs /merged
+          chown -R builder:builder /merged
+
+      - name: Bootstrap build environment
+        working-directory: /merged
+        run: |
+          # Fixes:
+          # Failed to write to /proc/self/uid_map (Operation not permitted)
+          # See: https://github.com/void-linux/void-packages/pull/54450
+          echo XBPS_CHROOT_CMD=uchroot >> etc/conf
+          sudo -Eu builder ./xbps-src -A ${VOID_ARCH} binary-bootstrap
+
+      - name: Build packages
+        working-directory: /merged
+        run: |
+          sudo -Eu builder ./xbps-src pkg -A ${VOID_ARCH} rudolfs
+
+      - name: Sign packages
+        working-directory: /merged
+        env:
+          SIGN_KEY: ${{ secrets.SIGN_KEY }}
+          XBPS_PASSPHRASE: ${{ secrets.SIGN_KEY_PASSPHRASE }}
+          XBPS_TARGET_ARCH: ${{ env.VOID_ARCH }}
+        run: |
+          echo "$SIGN_KEY" > sign_key.pem
+
+          sudo -Eu builder xbps-rindex --privkey sign_key.pem --signedby "xbps-pkgs" --sign hostdir/binpkgs
+          sudo -Eu builder xbps-rindex --privkey sign_key.pem --sign-pkg  hostdir/binpkgs/*.xbps
+
+          rm sign_key.pem
+
+      - name: Push packages
+        run: |
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+
+          # || to ignore error if branch doesn't exist
+          git branch -D ${VOID_REPOSITORY} || true
+          git switch --orphan ${VOID_REPOSITORY}
+
+          cp -r /merged/hostdir/binpkgs/* ./
+          chown -R root:root .
+
+          git add .
+          git commit -m "Update packages"
+          git push -f -u origin ${VOID_REPOSITORY}
