@@ -55,7 +55,10 @@ jobs:
       - name: Build packages
         working-directory: /merged
         run: |
-          sudo -Eu builder ./xbps-src pkg -A ${VOID_ARCH} rudolfs
+          for package in "$GITHUB_WORKSPACE/srcpkgs/*"
+          do
+            sudo -Eu builder ./xbps-src pkg -A ${VOID_ARCH} $(basename $package)
+          done
 
       - name: Sign packages
         working-directory: /merged
