@@ -1,0 +1,36 @@
+# Template file for 'zerotier-one'
+
+pkgname=zerotier-one
+version=1.16.2
+revision=1
+build_style=gnu-makefile
+build_helper=rust
+make_check_target=selftest
+hostmakedepends="cargo pkg-config nodejs" # NodeJS for building docs
+makedepends="openssl-devel"
+short_desc="Smart Ethernet Switch for Earth"
+maintainer="ryze312 <50497128+ryze312@users.noreply.github.com>"
+license="MPL-2.0" # When built without ZT_NONFREE
+homepage="https://github.com/zerotier/ZeroTierOne"
+changelog="${homepage}/blob/${version}/RELEASE-NOTES.md"
+distfiles="${homepage}/archive/refs/tags/${version}.tar.gz"
+checksum=2c607f573c6e38815433af289d364a689a203b18b51125f06c4472014d0657f0
+
+post_build() {
+	# Not built by default target
+	# See https://github.com/zerotier/ZeroTierOne/pull/2581
+	make doc
+}
+
+post_install() {
+    # Move binaries from sbin to bin
+	vmkdir /usr/bin
+	mv "${PKGDESTDIR}/usr/sbin/zerotier-"* "$PKGDESTDIR/usr/bin"
+	rmdir "${PKGDESTDIR}/usr/sbin/"
+
+    # Remove symlinks in /var/lib
+	rm "${PKGDESTDIR}/var/lib/zerotier-one/zerotier"*
+	rmdir "${PKGDESTDIR}/var/lib/zerotier-one"
+
+    vsv zerotier-one
+}
